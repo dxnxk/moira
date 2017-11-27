@@ -46,20 +46,19 @@ func (sender *Sender) SendEvents(events moira.NotificationEvents, contact moira.
 	state := events.GetSubjectState()
 	tags := trigger.GetTags()
 
-	if sender.GraylogHost != "" {
-		g, err := gelf.NewTCPWriter(sender.GraylogHost)
+	glf, err := gelf.NewUDPWriter(sender.GraylogHost)
+	if err != nil {
+		return err
 	}
 
-	m := g.WriteMessage(gelf.Message{
-		Version:      "1.1__test",
-		Host:         "localhost__test",
-		ShortMessage: "Sample test__test",
-		FullMessage:  "Stacktrace__test",
-		Timestamp:    time.Now().Unix(),
-		Level:        1,
-	})
-
-	if err := g.GelfWriter.Close(); err != nil {
+	msg := gelf.Message{
+		Version: "1.1",
+		Host:    "mineproxy",
+		Short:   "A_short_message",
+		Full:    tags,
+		Level:   5,
+	}
+	if err := glf.WriteMessage(&msg); err != nil {
 		return err
 	}
 
