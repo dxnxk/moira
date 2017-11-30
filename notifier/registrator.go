@@ -20,6 +20,7 @@ import (
 func (notifier *StandardNotifier) RegisterSenders(connector moira.Database) error {
 	for _, senderSettings := range notifier.config.Senders {
 		senderSettings["front_uri"] = notifier.config.FrontURL
+		senderSettings["graylog_host"] = notifier.config.Graylog
 		switch senderSettings["type"] {
 		case "pushover":
 			if err := notifier.RegisterSender(senderSettings, &pushover.Sender{}); err != nil {

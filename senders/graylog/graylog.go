@@ -1,14 +1,14 @@
 package graylog
 
 import (
-	"flag"
-	"fmt"
+	//	"flag"
+	//	"fmt"
 	"github.com/moira-alert/moira"
 	"gopkg.in/Graylog2/go-gelf.v2/gelf"
-	"io"
-	"log"
-	"os"
-	"strconv"
+	//	"io"
+	//	"log"
+	//	"os"
+	//	"strconv"
 	"time"
 )
 
@@ -16,8 +16,8 @@ import (
 type Sender struct {
 	GraylogHost string
 	log         moira.Logger
-	Template    *template.Template
-	location    *time.Location
+	//	Template    *template.Template
+	location *time.Location
 }
 
 type templateRow struct {
@@ -43,7 +43,7 @@ func (sender *Sender) Init(senderSettings map[string]string, logger moira.Logger
 // SendEvents implements Sender interface Send
 func (sender *Sender) SendEvents(events moira.NotificationEvents, contact moira.ContactData, trigger moira.TriggerData, throttled bool) error {
 
-	state := events.GetSubjectState()
+	//	state := events.GetSubjectState()
 	tags := trigger.GetTags()
 
 	glf, err := gelf.NewUDPWriter(sender.GraylogHost)
