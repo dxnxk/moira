@@ -2,11 +2,13 @@ package graylog
 
 import (
 	"fmt"
+	"strings"
 	"github.com/moira-alert/moira"
 	"gopkg.in/Graylog2/go-gelf.v2/gelf"
 	"strconv"
 	"time"
 	"github.com/ShowMax/go-fqdn"
+	"mvdan.cc/xurls"
 )
 
 // Sender implements moira sender interface
@@ -14,7 +16,6 @@ type Sender struct {
 	GraylogHost string
         FrontURI string
 	log         moira.Logger
-	//	Template    *template.Template
 	location *time.Location
 }
 
@@ -38,6 +39,16 @@ func (sender *Sender) Init(senderSettings map[string]string, logger moira.Logger
 	return nil
 }
 
+
+// Build_desc remakes Desc to include url to grafana, if url exists in Desc.
+func Build_desc(url_Desc string, trigger_Desc string, attached_Descr string) string {
+	if len(strings.TrimSpace(url_Desc)) == 0 {
+		return fmt.Sprintf("\n%s", trigger_Desc)
+        } else {
+		return fmt.Sprintf("\n%s", attached_Descr)
+        }
+}
+
 // SendEvents implements Sender interface Send
 func (sender *Sender) SendEvents(events moira.NotificationEvents, contact moira.ContactData, trigger moira.TriggerData, throttled bool) error {
 
@@ -50,30 +61,13 @@ func (sender *Sender) SendEvents(events moira.NotificationEvents, contact moira.
             "TEST":     6,
         }
 
-        templateData := struct {
-                Link        string
-                Description string
-                Throttled   bool
-                Items       []*templateRow
-        }{
-                Link:        fmt.Sprintf("%s/trigger/%s", sender.FrontURI, events[0].TriggerID),
-                Description: trigger.Desc,
-                Throttled:   throttled,
-                Items:       make([]*templateRow, 0, len(events)),
-        }
+        desc_url := xurls.Relaxed().FindString(trigger.Desc) // get url from Trigger Description
 
         for _, event := range events {
 
-                templateData.Items = append(templateData.Items, &templateRow{
-                        Metric:     event.Metric,
-                        Timestamp:  time.Unix(event.Timestamp, 0).In(sender.location).Format("15:04 02.01.2006"),
-                        Oldstate:   event.OldState,
-                        State:      event.State,
-                        Value:      strconv.FormatFloat(moira.UseFloat64(event.Value), 'f', -1, 64),
-                        WarnValue:  strconv.FormatFloat(trigger.WarnValue, 'f', -1, 64),
-                        ErrorValue: strconv.FormatFloat(trigger.ErrorValue, 'f', -1, 64),
-                        Message:    moira.UseString(event.Message),
-                })
+		url := strings.Join([]string{desc_url, event.Metric}, "")
+
+		descr := strings.Replace(trigger.Desc, desc_url, url, -1)
 
 	        glf, err := gelf.NewUDPWriter(sender.GraylogHost)
 	        if err != nil {
@@ -82,17 +76,18 @@ func (sender *Sender) SendEvents(events moira.NotificationEvents, contact moira.
 
 	        s := fmt.Sprintf("%s %s %s %s", trigger.Name, event.State, event.Metric, strconv.FormatFloat(moira.UseFloat64(event.Value), 'f', -1, 64))
 
-		f := fmt.Sprintf("Timestamp: %s\nMetric: %s\nOldState: %s\nState: %s\nValue: %s\nWarnValue: %s\nErrorValue: %s\nM_link: %s\nG_link: %s", 
-												time.Unix(event.Timestamp, 0).In(sender.location).Format("2006-01-02 15:04:05.999"),
-												event.Metric,
-												event.OldState,
-												event.State,
-												strconv.FormatFloat(moira.UseFloat64(event.Value), 'f', -1, 64),
-												strconv.FormatFloat(trigger.WarnValue, 'f', -1, 64),
-												strconv.FormatFloat(trigger.ErrorValue, 'f', -1, 64),
-												fmt.Sprintf("%s/trigger/%s", sender.FrontURI, events[0].TriggerID),
-                                                                                                fmt.Sprintf("Link to Grafana"),
-												)
+		f := fmt.Sprintf("Timestamp: %s\nTrigger: %s\nMetric: %s\nOldState: %s\nState: %s\nValue: %s\nWarnValue: %s\nErrorValue: %s\nLink: %s\nDescription: %s", 
+								time.Unix(event.Timestamp, 0).In(sender.location).Format("2006-01-02 15:04:05.999"),
+								trigger.Name,
+								event.Metric,
+								event.OldState,
+								event.State,
+								strconv.FormatFloat(moira.UseFloat64(event.Value), 'f', -1, 64),
+								strconv.FormatFloat(trigger.WarnValue, 'f', -1, 64),
+								strconv.FormatFloat(trigger.ErrorValue, 'f', -1, 64),
+                                                                fmt.Sprintf("\n%s/trigger/%s", sender.FrontURI, events[0].TriggerID),
+								Build_desc(desc_url, trigger.Desc, descr),
+								)
 
 	        msg := gelf.Message{
 	                Version: "1.1",
